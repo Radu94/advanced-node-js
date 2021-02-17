@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const requireLogin = require('../middlewares/requireLogin');
 const cleanCache = require('../middlewares/cleanCache');
 const uuid = require('uuid/v1');
+const { getBlogById, getBlogsByUserId, postNewBlog } = require('../controllers/blogController');
 
 const { accessKeyId, secretAccessKey } = require('../config/keys');
 const AWS = require('aws-sdk');
@@ -13,42 +14,23 @@ const s3 = new AWS.S3({
   region: 'us-east-2'
 });
 
+
 const Blog = mongoose.model('Blog');
 module.exports = (app) => {
   app.get('/api/blogs/:id', requireLogin, async (req, res) => {
-    const blog = await Blog.findOne({
-      _user: req.user.id,
-      _id: req.params.id
-    });
-
-    let key = `${req.user.id}/${blog.imguuid}.jpeg`;
-    let params = {
-      Bucket: 'advancednodebucket',
-      ResponseContentType: 'image/jpeg',
-      Key: key
-    };
-    let signedUrl = s3.getSignedUrl('getObject', params);
-    blogObj = blog.toObject();
-    blogObj["signedUrl"] = signedUrl;
-    res.send(blogObj);
+    const blogObject = await getBlogById({ Blog, s3 })(req.user.id, req.params.id);
+    res.send(blogObject);
   });
 
   app.get('/api/blogs', requireLogin, async (req, res) => {
-    const blogs = await Blog
-      .find({ _user: req.user.id })
-      .cache({ key: req.user.id });
+    const blogs = await getBlogsByUserId({Blog})(req.user.id);
     res.send(blogs);
   });
 
   app.post('/api/blogs', requireLogin, cleanCache, async (req, res) => {
     const { title, content } = req.body;
     imguuid = uuid();
-    const blog = new Blog({
-      title,
-      content,
-      imguuid,
-      _user: req.user.id
-    });
+    const blog = await postNewBlog({Blog})(title, content, imguuid, req.user.id);
 
     try {
       await blog.save();

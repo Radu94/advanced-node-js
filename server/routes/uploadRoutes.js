@@ -3,6 +3,7 @@ const uuid = require('uuid/v1');
 
 const requireLogin = require('../middlewares/requireLogin');
 const { accessKeyId, secretAccessKey } = require('../config/keys');
+const {getSignedUrl} = require("../controllers/uploadController");
 
 const s3 = new AWS.S3({
   accessKeyId,
@@ -12,12 +13,8 @@ const s3 = new AWS.S3({
 });
 
 module.exports = (app) => {
-  app.get('/api/upload', requireLogin, (req, res) => {
-    const Key = `${req.user.id}/${req.query.Key}.jpeg`;
-    s3.getSignedUrl('putObject', {
-      Bucket: 'advancednodebucket',
-      ContentType: 'image/jpeg',
-      Key
-    }, (err, url) => res.send({ Key, url }));
+  app.get('/api/upload', requireLogin, async (req, res) => {
+    const {Key, url} = await getSignedUrl({s3})(req.user.id, req.query.Key);
+    res.send({ Key, url });
   });
 };
